@@ -15,6 +15,8 @@ black = (0, 0, 0)
 red = (255, 0, 0)
 green = (0, 255, 0)
 blue = (0, 0, 255)
+shadow_color = (50, 50, 50)
+opaque_color = (200, 200, 200)
 
 # Set up the clock
 clock = pygame.time.Clock()
@@ -30,6 +32,13 @@ def project_point(point, width, height, fov, viewer_distance):
     x = point.x * factor + width / 2
     y = -point.y * factor + height / 2
     return int(x), int(y)
+
+def project_shadow(point, light_position):
+    # Shadow plane at z = -2
+    t = (point.z - light_position.z) / (light_position.z - -2)
+    shadow_x = light_position.x + t * (point.x - light_position.x)
+    shadow_y = light_position.y + t * (point.y - light_position.y)
+    return Point3D(shadow_x, shadow_y, -2)
 
 # Define the cube's vertices
 vertices = [
@@ -50,6 +59,16 @@ edges = [
     (0, 4), (1, 5), (2, 6), (3, 7)   # connecting edges
 ]
 
+# Define the faces (sides) of the cube
+faces = [
+    (0, 1, 2, 3),  # back face
+    (4, 5, 6, 7),  # front face
+    (0, 1, 5, 4),  # top face
+    (2, 3, 7, 6),  # bottom face
+    (0, 3, 7, 4),  # left face
+    (1, 2, 6, 5)   # right face
+]
+
 # Define the axis points
 axis_points = {
     'x': Point3D(2, 0, 0),
@@ -61,11 +80,25 @@ axis_points = {
 fov = 256
 viewer_distance = 4
 
+# Light position
+light_position = Point3D(5, -5, -10)
+
 def draw_cube():
     projected_points = [project_point(v, width, height, fov, viewer_distance) for v in vertices]
+    shadow_points = [project_point(project_shadow(v, light_position), width, height, fov, viewer_distance) for v in vertices]
 
+    # Draw shadows
     for edge in edges:
-        pygame.draw.line(screen, white, projected_points[edge[0]], projected_points[edge[1]], 1)
+        pygame.draw.line(screen, shadow_color, shadow_points[edge[0]], shadow_points[edge[1]], 1)
+
+    # Draw faces
+    for face in faces:
+        point_list = [projected_points[i] for i in face]
+        pygame.draw.polygon(screen, opaque_color if face == faces[1] else white, point_list)
+
+    # Draw edges
+    for edge in edges:
+        pygame.draw.line(screen, black, projected_points[edge[0]], projected_points[edge[1]], 1)
 
 def draw_axes():
     origin = Point3D(0, 0, 0)
@@ -109,10 +142,11 @@ def rotate_point(point, angle_x, angle_y, angle_z):
 # Main game loop
 running = True
 angle_x, angle_y, angle_z = 0, 0, 0
-rotation_speed = 0.01
-mouse_sensitivity = 0.005
+rotation_speed = 0.001
+mouse_sensitivity = 0.001
 mouse_x, mouse_y = pygame.mouse.get_pos()
 mouse_down = False
+rotating = False
 
 while running:
     for event in pygame.event.get():
@@ -121,10 +155,12 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 mouse_down = True
+                rotating = True
                 mouse_x, mouse_y = event.pos
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1:
                 mouse_down = False
+                rotating = False
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT]:
@@ -148,11 +184,12 @@ while running:
     screen.fill(black)
 
     # Rotate the cube
-    for vertex in vertices:
-        rotate_point(vertex, angle_x, angle_y, angle_z)
+    if rotating:
+        for vertex in vertices:
+            rotate_point(vertex, angle_x, angle_y, angle_z)
 
-    for axis in axis_points.values():
-        rotate_point(axis, angle_x, angle_y, angle_z)
+        for axis in axis_points.values():
+            rotate_point(axis, angle_x, angle_y, angle_z)
 
     draw_cube()
     draw_axes()
